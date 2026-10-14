@@ -24,6 +24,7 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
     private readonly string _hostPage;
     private readonly ILogger _logger;
     private string? _documentToken;
+    private Uri? _navigationUri;
     private Task _sendQueue = Task.CompletedTask;
     private bool _disposed;
 
@@ -103,7 +104,10 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
         }
         else
         {
-            _documentToken = null;
+            // WebKit also reports fragment changes, which do not load a new document.
+            if (!BlazorDocumentPolicy.IsFragmentNavigation(_navigationUri, uri))
+                _documentToken = null;
+            _navigationUri = uri;
         }
     }
 
@@ -234,6 +238,7 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
         await base.DisposeAsyncCore();
         _disposed = true;
         _documentToken = null;
+        _navigationUri = null;
         _webView.EnvironmentRequested -= OnEnvironmentRequested;
         _webView.WebResourceRequested -= OnWebResourceRequested;
         _webView.WebMessageReceived -= OnWebMessageReceived;

@@ -26,9 +26,11 @@ internal static class Program
         Smoke = args.Contains("--smoke");
         Backend = Argument(args, "--backend");
         ReportPath = Argument(args, "--report");
-        return AppBuilder.Configure<ProbeApp>().UsePlatformDetect()
+        var exitCode = AppBuilder.Configure<ProbeApp>().UsePlatformDetect()
             .With(new X11PlatformOptions { RenderingMode = [X11RenderingMode.Software] }).LogToTrace()
             .StartWithClassicDesktopLifetime(args);
+        Console.WriteLine($"Desktop lifetime exited: {exitCode}");
+        return exitCode;
     }
 
     private static string? Argument(string[] args, string name)
@@ -87,7 +89,10 @@ internal sealed class ProbeApp : Application
                 manager.UnhandledException += (_, ex) => hostFailure.TrySetResult(ex);
                 if (Program.Smoke)
                     view.WebResourceRequested += (_, args) =>
-                        Console.WriteLine($"Resource: {args.Request.Method} {args.Request.Uri} => {args.Response?.StatusCode}");
+                    {
+                        args.Request.Headers.TryGetValue("Origin", out var origin);
+                        Console.WriteLine($"Resource: {args.Request.Method} {args.Request.Uri} => {args.Response?.StatusCode}, Origin={origin}");
+                    };
                 view.EnvironmentRequested += (_, args) =>
                 {
                     args.EnableDevTools = !Program.Smoke;
@@ -98,8 +103,8 @@ internal sealed class ProbeApp : Application
                 manager.Navigate(cycle == 0 ? "/" : "/deep/link");
                 window.Content = view;
                 await navigated.Task.WaitAsync(TimeSpan.FromSeconds(60));
-                await WaitAsync(view, "() => document.querySelector('#probe')?.dataset.ready === 'true'", hostFailure.Task);
                 adapter = view.AdapterInfo?.Type.ToString();
+                await WaitAsync(view, "() => document.querySelector('#probe')?.dataset.ready === 'true'", hostFailure.Task);
                 Check(adapter is not null, "native-adapter", checks);
                 if (Program.Backend is not null)
                     Check(adapter == (Program.Backend == "gtk" ? "WebKitGtk" : "WpeWebKit"), "requested-backend", checks);
@@ -194,7 +199,9 @@ internal sealed class ProbeApp : Application
                 Console.WriteLine(report);
                 if (Program.ReportPath is { } path)
                     File.WriteAllText(path, report);
+                Console.WriteLine("Stopping desktop lifetime");
                 desktop.Shutdown(failure is null ? 0 : 1);
+                Console.WriteLine("Desktop lifetime shutdown requested");
             }
         }
     }
@@ -230,7 +237,7 @@ internal sealed class ProbeApp : Application
             await Task.Delay(100);
         }
         var document = await view.InvokeScript(
-            "JSON.stringify({url:location.href,state:document.readyState,blazor:typeof Blazor,bridge:typeof invokeCSharpAction,receiver:typeof window.__avaloniaBlazorReceiveMessage,body:document.body?.innerText,scripts:Array.from(document.scripts,s=>s.src),resources:performance.getEntriesByType('resource').map(r=>r.name)})");
+            "JSON.stringify({url:location.href,origin:location.origin,state:document.readyState,blazor:typeof Blazor,bridge:typeof invokeCSharpAction,receiver:typeof window.__avaloniaBlazorReceiveMessage,body:document.body?.innerText,scripts:Array.from(document.scripts,s=>s.src),resources:performance.getEntriesByType('resource').map(r=>r.name)})");
         throw new TimeoutException($"Native Blazor probe did not satisfy {predicate}. Adapter: {view.AdapterInfo}. Document: {document}");
     }
 

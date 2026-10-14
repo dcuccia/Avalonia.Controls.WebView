@@ -10,6 +10,12 @@ internal static class BlazorDocumentPolicy
     internal static bool IsWithinOrigin(Uri origin, Uri uri) =>
         uri.IsAbsoluteUri && origin.IsBaseOf(uri);
 
+    internal static bool IsFragmentNavigation(Uri? current, Uri destination) =>
+        current is { IsAbsoluteUri: true } && destination.IsAbsoluteUri
+        && current.Fragment != destination.Fragment
+        && Uri.Compare(current, destination, UriComponents.SchemeAndServer | UriComponents.PathAndQuery,
+            UriFormat.UriEscaped, StringComparison.Ordinal) == 0;
+
     internal static bool IsDocumentRequest(WebViewWebResourceRequest request)
     {
         if (request.Method != HttpMethod.Get && request.Method != HttpMethod.Head)

@@ -80,6 +80,32 @@ interop remains in an exported, collocated `.razor.js` module with a typed C#
 wrapper. The host page explicitly disables automatic Blazor startup until the
 transport is installed.
 
+### OSS implementation lineage
+
+Prefer the maintained implementation over a parallel framework:
+
+| Surface | Reference and reuse |
+| --- | --- |
+| Renderer, IPC, DI page scopes, static assets | [ASP.NET Core `WebViewManager`](https://github.com/dotnet/aspnetcore/blob/main/src/Components/WebView/WebView/src/WebViewManager.cs), directly inherited through the shipping 10.0.12 package |
+| Dispatcher adaptation | [MAUI `MauiDispatcher`](https://github.com/dotnet/maui/blob/main/src/BlazorWebView/src/Maui/MauiDispatcher.cs); our adapter similarly maps each overload to the UI framework's existing dispatcher |
+| WebKit bridge initialization | [MAUI Apple host](https://github.com/dotnet/maui/blob/main/src/BlazorWebView/src/Maui/iOS/BlazorWebViewHandler.iOS.cs); explicitly provide `window.external`, which WebKit does not supply, before `Blazor.start()` |
+| Non-Windows host contract | [MAUI Tizen manager](https://github.com/dotnet/maui/blob/main/src/BlazorWebView/src/Maui/Tizen/TizenWebViewManager.cs), using the same manager/dispatcher/file-provider layering |
+| URI-to-file lookup | [MAUI query normalization](https://github.com/dotnet/maui/blob/main/src/BlazorWebView/src/SharedSource/QueryStringHelper.cs); we use the standard `Uri` API to exclude query and fragment without duplicating that internal helper |
+| Native engines and UI lifetime | Existing Avalonia `NativeWebView`, desktop lifetime, dispatcher, and adapter implementation; no additional native engine wrapper in the Blazor package |
+
+These are architecture/protocol references, not wholesale source copies.
+Platform-specific handlers are not interchangeable: Tizen is a useful
+Linux-based precedent, not desktop GTK/WPE support. Native provenance, request
+cancellation and response behavior must be checked independently rather than
+copied blindly from a platform handler.
+
+The Linux pattern investigation also includes [Microsoft Playwright](https://github.com/microsoft/playwright)
+(native engine lifecycle, platform prerequisites and diagnostics) and
+[SkiaSharp](https://github.com/mono/SkiaSharp) (native resource and graphics
+ownership). They are references, not application dependencies. ASP.NET Core
+remains the primary source for Blazor semantics; Avalonia remains the owner of
+rendering and native event-loop integration.
+
 ## Trust boundary and limitations
 
 The public WebView message event carries a body, **not authenticated native

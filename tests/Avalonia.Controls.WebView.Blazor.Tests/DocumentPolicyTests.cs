@@ -17,6 +17,17 @@ public class DocumentPolicyTests
         Assert.Equal(expected, BlazorDocumentPolicy.IsWithinOrigin(new("app://localhost/"), new(value)));
 
     [Theory]
+    [InlineData("app://localhost/", "app://localhost/#anchor", true)]
+    [InlineData("app://localhost/#anchor", "app://localhost/", true)]
+    [InlineData("app://localhost/#anchor", "app://localhost/#next", true)]
+    [InlineData("app://localhost/#anchor", "app://localhost/#anchor", false)]
+    [InlineData("app://localhost/", "app://localhost/page#anchor", false)]
+    [InlineData("app://localhost/?v=1", "app://localhost/?v=2#anchor", false)]
+    [InlineData("app://localhost/", "app://other/#anchor", false)]
+    public void Only_Fragment_Changes_Preserve_The_Document(string current, string destination, bool expected) =>
+        Assert.Equal(expected, BlazorDocumentPolicy.IsFragmentNavigation(new(current), new(destination)));
+
+    [Theory]
     [InlineData("document", "text/html", "GET", true)]
     [InlineData("script", "text/html", "GET", false)]
     [InlineData("iframe", "text/html", "GET", false)]
