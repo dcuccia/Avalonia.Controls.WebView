@@ -60,6 +60,23 @@ on Windows WebView2, macOS WKWebView, and GTK/WPE on Linux x64 and ARM64. It als
 runs the upstream response-contract tests and our document-policy tests.
 Each job uploads its application and native report.
 
+### Verified baseline
+
+[Run 38628511676](https://github.com/dcuccia/Avalonia.Controls.WebView/actions/runs/38628511676)
+passed all six native jobs on 2026-10-14 at code commit `0140f91`.
+Each ran the published app through both host cycles and exited successfully;
+a passing JSON report alone was not treated as proof of process teardown.
+
+| Host | Native architecture | Result |
+| --- | --- | --- |
+| Windows / WebView2 | x64 | Passed |
+| macOS / WKWebView | ARM64 | Passed |
+| Ubuntu 24.04 / GTK | x64 and ARM64 | Passed |
+| Debian 13 / WPE | x64 and ARM64 | Passed |
+
+The Linux jobs use software graphics, Xvfb and the sandbox setting described
+below. These results establish that baseline, not unrestricted deployment support.
+
 The probe exposed a GTK cancellation defect independent of Blazor: returning
 `TRUE` from `decide-policy` without making a decision lets WebKit default to
 `use`, even when the managed event was cancelled. This fork calls
