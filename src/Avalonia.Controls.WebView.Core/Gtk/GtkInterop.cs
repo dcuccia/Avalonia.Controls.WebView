@@ -138,6 +138,9 @@ internal static unsafe partial class GtkInterop
     [DllImport(LibWebKit)]
     internal static extern void webkit_web_view_stop_loading(IntPtr webView);
 
+    [LibraryImport(LibWebKit)]
+    internal static partial void webkit_policy_decision_ignore(IntPtr decision);
+
     [DllImport(LibWebKit)]
     public static extern nint webkit_web_view_run_javascript_finish(IntPtr webView, IntPtr result, GError** error);
 
