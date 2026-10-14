@@ -1,0 +1,92 @@
+name: Blazor native probe
+
+on:
+  push:
+    branches: [ "dcuccia-blazor-*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: ${{ matrix.name }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows WebView2 x64
+            os: windows-latest
+            rid: win-x64
+            backend: ""
+          - name: macOS WKWebView ARM64
+            os: macos-15
+            rid: osx-arm64
+            backend: ""
+          - name: Linux GTK x64
+            os: ubuntu-24.04
+            rid: linux-x64
+            backend: gtk
+          - name: Linux WPE x64
+            os: ubuntu-24.04
+            rid: linux-x64
+            backend: wpe
+          - name: Linux GTK ARM64
+            os: ubuntu-24.04-arm
+            rid: linux-arm64
+            backend: gtk
+          - name: Linux WPE ARM64
+            os: ubuntu-24.04-arm
+            rid: linux-arm64
+            backend: wpe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Install Linux native engines
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb dbus-x11 libwebkit2gtk-4.1-0 libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1 libegl1-mesa-dev libgles2-mesa-dev
+          dpkg-query -W libwebkit2gtk-4.1-0 libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1
+      - name: Test host policy and upstream response contract
+        shell: pwsh
+        run: |
+          dotnet test --project tests/Avalonia.Controls.WebView.Blazor.Tests/Avalonia.Controls.WebView.Blazor.Tests.csproj -p:WebViewDesktopOnly=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test --project tests/Avalonia.Controls.WebView.Tests/Avalonia.Controls.WebView.Tests.csproj -p:WebViewDesktopOnly=true --filter-class Avalonia.Controls.WebView.Tests.WebResourceResponseTests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish a standalone native application
+        shell: pwsh
+        run: |
+          dotnet publish samples/BlazorProbe/BlazorProbe.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:WebViewDesktopOnly=true -o artifacts/blazor-probe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run Windows or macOS native smoke
+        if: runner.os != 'Linux'
+        shell: pwsh
+        run: |
+          $app = if ($IsWindows) { "./artifacts/blazor-probe/BlazorProbe.exe" } else { "./artifacts/blazor-probe/BlazorProbe" }
+          & $app --smoke --report artifacts/native-report.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run Linux native smoke under Xvfb
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          # Ephemeral CI only. Sandbox compatibility remains a separate deployment gate.
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
+        run: |
+          timeout 300s dbus-run-session -- xvfb-run -a ./artifacts/blazor-probe/BlazorProbe --smoke --backend ${{ matrix.backend }} --report artifacts/native-report.json
+      - name: Upload native evidence and runnable application
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blazor-probe-${{ matrix.rid }}-${{ matrix.backend || 'native' }}
+          path: |
+            artifacts/native-report.json
+            artifacts/blazor-probe
+          retention-days: 7

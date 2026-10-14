@@ -1,0 +1,58 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject ProbeState State
+
+<section id="probe" data-ready="@(_ready ? "true" : "false")">
+    <h1>Avalonia Blazor native probe</h1>
+    <p id="rcl-marker">Razor class library rendered</p>
+    <p id="interop-result">@_result</p>
+    <p id="click-count">@_clicks</p>
+    <button id="increment" @onclick="Increment">Increment C# state</button>
+    <a href="/deep/link">Deep link</a>
+    @if (_error is not null)
+    {
+        <p id="probe-error">@_error</p>
+    }
+</section>
+
+@code {
+    private ProbeInterop? _interop;
+    private DotNetObjectReference<ProbePanel>? _reference;
+    private string _result = "Loading module";
+    private string? _error;
+    private int _clicks;
+    private bool _ready;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        try
+        {
+            _interop = new ProbeInterop(JS);
+            _reference = DotNetObjectReference.Create(this);
+            _result = await _interop.RoundTripAsync(_reference);
+            _ready = _result == "js:dotnet:probe";
+            State.RenderCount++;
+            State.LastResult = _result;
+        }
+        catch (JSException ex)
+        {
+            _error = ex.Message;
+        }
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task<string> Echo(string value) => Task.FromResult("dotnet:" + value);
+
+    private void Increment() => _clicks++;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_interop is not null)
+            await _interop.DisposeAsync();
+        _reference?.Dispose();
+        State.DisposeCount++;
+    }
+}

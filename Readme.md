@@ -39,6 +39,10 @@ Note 2: some shared code is linked as files, like NativeWebView.cs, with `#if AV
 
 ## Build
 
+This fork also contains an [experimental Blazor integration probe](samples/BlazorProbe/README.md)
+over the local-content API proposed in upstream PR 99. It is a separate
+downstream consumer, not official Avalonia Blazor support.
+
 This repo uses NukeBuild for build and packaging.
 Main build steps:
 1. Compile - builds all the `src` projects

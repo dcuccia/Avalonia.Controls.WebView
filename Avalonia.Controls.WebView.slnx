@@ -24,6 +24,8 @@
       <Platform Solution="*|x86" Project="x86" />
     </Project>
     <Project Path="samples/Avalonia.Xpf.Controls.WebView.Samples/Avalonia.Xpf.Controls.WebView.Samples.csproj" />
+    <Project Path="samples/BlazorProbe.Components/BlazorProbe.Components.csproj" />
+    <Project Path="samples/BlazorProbe/BlazorProbe.csproj" />
     <Project Path="samples/NativeWebViewTest/NativeWebViewTest.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
@@ -34,9 +36,11 @@
     <File Path="Readme.md" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="tests/Avalonia.Controls.WebView.Blazor.Tests/Avalonia.Controls.WebView.Blazor.Tests.csproj" />
     <Project Path="tests/Avalonia.Controls.WebView.Tests/Avalonia.Controls.WebView.Tests.csproj" />
   </Folder>
   <Folder Name="/WebView/">
+    <Project Path="src/Avalonia.Controls.WebView.Blazor/Avalonia.Controls.WebView.Blazor.csproj" />
     <Project Path="src/Avalonia.Controls.WebView.Core/Avalonia.Controls.WebView.Core.csproj" />
     <Project Path="src/Avalonia.Controls.WebView/Avalonia.Controls.WebView.csproj" />
     <Project Path="src/Avalonia.Xpf.Controls.WebView/Avalonia.Xpf.Controls.WebView.csproj" />
