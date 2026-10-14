@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <StaticWebAssetProjectMode>Root</StaticWebAssetProjectMode>
+    <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
     <PublishAot>false</PublishAot>
     <IsAotCompatible>false</IsAotCompatible>
     <ApplicationManifest>app.manifest</ApplicationManifest>

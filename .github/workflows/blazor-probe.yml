@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: blazor-probe-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   native:
     name: ${{ matrix.name }}
@@ -32,6 +36,7 @@ jobs:
             os: ubuntu-24.04
             rid: linux-x64
             backend: wpe
+            container: debian:trixie-slim
           - name: Linux GTK ARM64
             os: ubuntu-24.04-arm
             rid: linux-arm64
@@ -40,32 +45,37 @@ jobs:
             os: ubuntu-24.04-arm
             rid: linux-arm64
             backend: wpe
+            container: debian:trixie-slim
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     steps:
+      - name: Install Debian WPE runtime and build prerequisites
+        if: matrix.backend == 'wpe'
+        run: |
+          apt-get update -qq
+          apt-get install -y ca-certificates curl git libicu76 xvfb dbus-x11 libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1 libegl1-mesa-dev libgles2-mesa-dev
+          dpkg-query -W libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
-      - name: Install Linux native engines
-        if: runner.os == 'Linux'
+      - name: Install Ubuntu GTK runtime
+        if: matrix.backend == 'gtk'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y xvfb dbus-x11 libwebkit2gtk-4.1-0 libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1 libegl1-mesa-dev libgles2-mesa-dev
-          dpkg-query -W libwebkit2gtk-4.1-0 libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1
+          sudo apt-get install -y xvfb dbus-x11 libwebkit2gtk-4.1-0 libegl1-mesa-dev libgles2-mesa-dev
+          dpkg-query -W libwebkit2gtk-4.1-0
       - name: Test host policy and upstream response contract
-        shell: pwsh
+        shell: bash
         run: |
           dotnet test --project tests/Avalonia.Controls.WebView.Blazor.Tests/Avalonia.Controls.WebView.Blazor.Tests.csproj -p:WebViewDesktopOnly=true
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet test --project tests/Avalonia.Controls.WebView.Tests/Avalonia.Controls.WebView.Tests.csproj -p:WebViewDesktopOnly=true --filter-class Avalonia.Controls.WebView.Tests.WebResourceResponseTests
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Publish a standalone native application
-        shell: pwsh
+        shell: bash
         run: |
           dotnet publish samples/BlazorProbe/BlazorProbe.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:WebViewDesktopOnly=true -o artifacts/blazor-probe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run Windows or macOS native smoke
         if: runner.os != 'Linux'
         shell: pwsh

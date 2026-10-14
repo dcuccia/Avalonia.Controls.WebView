@@ -23,7 +23,9 @@ dotnet run --project samples\BlazorProbe\BlazorProbe.csproj -p:WebViewDesktopOnl
 `--backend gtk` and `--backend wpe` select an exhaustive Linux adapter preference:
 the probe fails rather than silently passing on another engine. Linux needs the
 corresponding WebKitGTK 4.1 or WPE WebKit 2.0 runtime and a graphical session.
-The GitHub workflow uses Xvfb and a session bus on Linux.
+The GitHub workflow uses Xvfb and a session bus on Linux. GTK runs on Ubuntu
+24.04; WPE runs in Debian 13 containers because the required WPE packages are
+not available in Ubuntu 24.04. Both execute natively on their runner architecture.
 
 `WebViewDesktopOnly` restricts the existing source projects to .NET 10 so this
 consumer does not require Android/browser workloads. It does not change their
