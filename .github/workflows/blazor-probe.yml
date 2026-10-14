@@ -90,7 +90,7 @@ jobs:
           # Ephemeral CI only. Sandbox compatibility remains a separate deployment gate.
           WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
         run: |
-          timeout 300s dbus-run-session -- xvfb-run -a ./artifacts/blazor-probe/BlazorProbe --smoke --backend ${{ matrix.backend }} --report artifacts/native-report.json
+          timeout 300s xvfb-run -a dbus-run-session -- ./artifacts/blazor-probe/BlazorProbe --smoke --backend ${{ matrix.backend }} --report artifacts/native-report.json
       - name: Upload native evidence and runnable application
         if: always()
         uses: actions/upload-artifact@v4

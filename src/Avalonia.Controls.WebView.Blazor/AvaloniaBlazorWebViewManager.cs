@@ -128,27 +128,41 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
         var relative = _origin.MakeRelativeUri(args.Request.Uri).GetComponents(
             UriComponents.SerializationInfoString, UriFormat.Unescaped);
         var path = relative.Split('?', '#')[0];
-        if (path == BootPath)
-        {
-            if (_documentToken is not { } token)
-            {
-                args.Response = new() { StatusCode = 409 };
-                return;
-            }
-            args.Response = TextResponse(s_bootScript.Replace("__DOCUMENT_TOKEN__", JsonSerializer.Serialize(token, BridgeJsonContext.Default.String)),
-                "text/javascript");
-            return;
-        }
-
         if (args.Request.Method != HttpMethod.Get && args.Request.Method != HttpMethod.Head)
         {
             args.Response = new() { StatusCode = 405, Headers = { ["Allow"] = "GET, HEAD" } };
             return;
         }
 
+        if (path == BootPath)
+        {
+            if (_documentToken is not { } token)
+            {
+                args.Response = new() { StatusCode = 409 };
+                _logger.LogWarning("The Blazor bootstrap was requested before an application document was served.");
+                return;
+            }
+            var boot = TextResponse(s_bootScript.Replace("__DOCUMENT_TOKEN__", JsonSerializer.Serialize(token, BridgeJsonContext.Default.String)),
+                "text/javascript");
+            if (args.Request.Method == HttpMethod.Head)
+            {
+                boot.Headers["Content-Length"] = boot.Content!.Length.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                boot.Content.Dispose();
+                var head = new WebViewWebResourceResponse { StatusCode = boot.StatusCode, ReasonPhrase = boot.ReasonPhrase };
+                foreach (var header in boot.Headers)
+                    head.Headers[header.Key] = header.Value;
+                boot = head;
+            }
+            args.Response = boot;
+            return;
+        }
+
         // Explicit host/root requests are documents even on engines that omit Accept.
         var document = path.Length == 0 || path == _hostPage || BlazorDocumentPolicy.IsDocumentRequest(args.Request);
-        var lookup = document && path.Length == 0 ? new Uri(_origin, _hostPage) : args.Request.Uri;
+        var lookup = document && path.Length == 0
+            ? new Uri(_origin, _hostPage)
+            : new Uri(args.Request.Uri.GetLeftPart(UriPartial.Path));
         if (!TryGetResponseContent(lookup.AbsoluteUri, document,
                 out var status, out var reason, out var content, out var headers))
             throw new InvalidOperationException("The content provider rejected a request inside its application origin.");

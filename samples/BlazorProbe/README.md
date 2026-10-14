@@ -40,8 +40,10 @@ it is not a headless browser simulation. It checks:
 
 - C# events and a .NET-to-JS-to-.NET round trip through a collocated RCL module.
 - RCL CSS, JSON, JavaScript initializer and Microsoft framework assets.
+- Query-string asset lookup, HEAD body/length semantics and method rejection.
 - Missing assets remain 404s; document requests can fall back to the host page.
 - Deep-link navigation and reload reattach the Blazor renderer.
+- Same-document anchor navigation preserves working interop.
 - Forged bridge messages are rejected and external fetches are blocked.
 - Two complete host creation/disposal cycles dispose component instances.
 

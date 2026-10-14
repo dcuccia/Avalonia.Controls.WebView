@@ -85,6 +85,9 @@ internal sealed class ProbeApp : Application
                 var hostFailure = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
                 manager = new AvaloniaBlazorWebViewManager(view, services, files);
                 manager.UnhandledException += (_, ex) => hostFailure.TrySetResult(ex);
+                if (Program.Smoke)
+                    view.WebResourceRequested += (_, args) =>
+                        Console.WriteLine($"Resource: {args.Request.Method} {args.Request.Uri} => {args.Response?.StatusCode}");
                 view.EnvironmentRequested += (_, args) =>
                 {
                     args.EnableDevTools = !Program.Smoke;
@@ -127,6 +130,15 @@ internal sealed class ProbeApp : Application
                     "async () => (await (await fetch('/_content/BlazorProbe.Components/asset.json')).json()).value === 42"),
                     "rcl-json-asset", checks);
                 Check(await EvaluateAsync(view,
+                    "async () => (await (await fetch('/_content/BlazorProbe.Components/asset.json?v=42')).json()).value === 42"),
+                    "query-string-asset", checks);
+                Check(await EvaluateAsync(view,
+                    "async () => { const r = await fetch('/_content/BlazorProbe.Components/asset.json', { method: 'HEAD' }); return r.status === 200 && Number(r.headers.get('Content-Length')) > 0 && (await r.text()).length === 0; }"),
+                    "head-asset", checks);
+                Check(await EvaluateAsync(view,
+                    "async () => { const r = await fetch('/_content/BlazorProbe.Components/asset.json', { method: 'POST' }); return r.status === 405 && r.headers.get('Allow') === 'GET, HEAD'; }"),
+                    "unsupported-method", checks);
+                Check(await EvaluateAsync(view,
                     "async () => { const r = await fetch('/missing.js'); return r.status === 404 && !(await r.text()).includes('<html'); }"),
                     "missing-asset-404", checks);
                 Check(await EvaluateAsync(view,
@@ -143,6 +155,10 @@ internal sealed class ProbeApp : Application
                 await view.InvokeScript("document.querySelector('#increment').click();");
                 await WaitAsync(view, "() => document.querySelector('#click-count')?.textContent === '2'", hostFailure.Task);
                 checks.Add("forged-ipc-rejected");
+                await view.InvokeScript("location.hash='probe-anchor'; void 0;");
+                await view.InvokeScript("document.querySelector('#increment').click();");
+                await WaitAsync(view, "() => document.querySelector('#click-count')?.textContent === '3'", hostFailure.Task);
+                checks.Add("same-document-navigation");
                 manager.Navigate("/deep/link");
                 await WaitAsync(view, "() => location.pathname === '/deep/link' && document.querySelector('#probe')?.dataset.ready === 'true' && document.querySelector('#click-count')?.textContent === '0'", hostFailure.Task);
                 checks.Add("deep-link-navigation");
@@ -213,14 +229,16 @@ internal sealed class ProbeApp : Application
                 return;
             await Task.Delay(100);
         }
-        throw new TimeoutException($"Native Blazor probe did not satisfy {predicate}. Adapter: {view.AdapterInfo}");
+        var document = await view.InvokeScript(
+            "JSON.stringify({url:location.href,state:document.readyState,blazor:typeof Blazor,bridge:typeof invokeCSharpAction,receiver:typeof window.__avaloniaBlazorReceiveMessage,body:document.body?.innerText,scripts:Array.from(document.scripts,s=>s.src),resources:performance.getEntriesByType('resource').map(r=>r.name)})");
+        throw new TimeoutException($"Native Blazor probe did not satisfy {predicate}. Adapter: {view.AdapterInfo}. Document: {document}");
     }
 
     private static async Task<bool> EvaluateAsync(NativeWebView view, string expression)
     {
         // Native InvokeScript APIs don't all await JS promises. Poll a plain string result.
         var id = "__probe" + Guid.NewGuid().ToString("N");
-        await view.InvokeScript($"window.{id}='pending'; Promise.resolve().then({expression}).then(v=>window.{id}=v?'true':'false',e=>window.{id}='error:'+e);");
+        await view.InvokeScript($"window.{id}='pending'; Promise.resolve().then({expression}).then(v=>window.{id}=v?'true':'false',e=>window.{id}='error:'+e); void 0;");
         for (var attempt = 0; attempt < 100; attempt++)
         {
             var value = await view.InvokeScript($"window.{id}");
