@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0;net10.0-android;net10.0-browser</TargetFrameworks>
+    <TargetFrameworks Condition="'$(WebViewDesktopOnly)' == 'true'">net10.0</TargetFrameworks>
 
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <RootNamespace>Avalonia.Controls</RootNamespace>
