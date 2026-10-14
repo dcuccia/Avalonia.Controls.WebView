@@ -27,7 +27,11 @@ internal static class Program
         Backend = Argument(args, "--backend");
         ReportPath = Argument(args, "--report");
         var exitCode = AppBuilder.Configure<ProbeApp>().UsePlatformDetect()
-            .With(new X11PlatformOptions { RenderingMode = [X11RenderingMode.Software] }).LogToTrace()
+            .With(new X11PlatformOptions
+            {
+                RenderingMode = [X11RenderingMode.Software],
+                UseGLibMainLoop = OperatingSystem.IsLinux() && Backend != "wpe"
+            }).LogToTrace()
             .StartWithClassicDesktopLifetime(args);
         Console.WriteLine($"Desktop lifetime exited: {exitCode}");
         return exitCode;
@@ -141,6 +145,9 @@ internal sealed class ProbeApp : Application
                     "async () => { const r = await fetch('/_content/BlazorProbe.Components/asset.json', { method: 'HEAD' }); return r.status === 200 && Number(r.headers.get('Content-Length')) > 0 && (await r.text()).length === 0; }"),
                     "head-asset", checks);
                 Check(await EvaluateAsync(view,
+                    "async () => { const r = await fetch('/_avalonia/boot.js', { method: 'HEAD' }); return r.status === 200 && Number(r.headers.get('Content-Length')) > 0 && r.headers.get('Cache-Control') === 'no-store' && (await r.text()).length === 0; }"),
+                    "head-bootstrap", checks);
+                Check(await EvaluateAsync(view,
                     "async () => { const r = await fetch('/_content/BlazorProbe.Components/asset.json', { method: 'POST' }); return r.status === 405 && r.headers.get('Allow') === 'GET, HEAD'; }"),
                     "unsupported-method", checks);
                 Check(await EvaluateAsync(view,
@@ -154,8 +161,25 @@ internal sealed class ProbeApp : Application
                 await WaitAsync(view, "() => document.querySelector('#click-count')?.textContent === '1'", hostFailure.Task);
                 checks.Add("blazor-dom-event");
                 Check(await EvaluateAsync(view,
-                    "async () => { try { await fetch('https://example.invalid/'); return false; } catch { return true; } }"),
+                    "async () => { const blocked = new Promise(resolve => document.addEventListener('securitypolicyviolation', e => resolve(e.effectiveDirective === 'connect-src' && new URL(e.blockedURI).hostname === 'example.invalid'), { once: true })); try { await fetch('https://example.invalid/'); return false; } catch { return await blocked; } }"),
                     "external-fetch-blocked", checks);
+                var externalNavigation = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                void ExternalNavigationStarting(object? sender, WebViewNavigationStartingEventArgs args)
+                {
+                    if (args.Request?.Host == "example.invalid")
+                        externalNavigation.TrySetResult(args.Cancel);
+                }
+                view.NavigationStarted += ExternalNavigationStarting;
+                try
+                {
+                    view.Navigate(new Uri("https://example.invalid/"));
+                    Check(await externalNavigation.Task.WaitAsync(TimeSpan.FromSeconds(10)),
+                        "external-navigation-blocked", checks);
+                }
+                finally
+                {
+                    view.NavigationStarted -= ExternalNavigationStarting;
+                }
                 await view.InvokeScript("invokeCSharpAction('{\"token\":\"forged\",\"source\":\"app://localhost/\",\"kind\":\"ipc\",\"message\":\"bad\"}');");
                 await view.InvokeScript("document.querySelector('#increment').click();");
                 await WaitAsync(view, "() => document.querySelector('#click-count')?.textContent === '2'", hostFailure.Task);
@@ -173,14 +197,16 @@ internal sealed class ProbeApp : Application
                     () => services.GetRequiredService<ProbeState>().RenderCount > renderCount);
                 checks.Add("reload");
                 Console.WriteLine("Disposing Blazor host");
-                await manager.DisposeAsync();
+                await Task.WhenAll(manager.DisposeAsync().AsTask(), manager.DisposeAsync().AsTask());
+                checks.Add("concurrent-host-disposal");
                 manager = null;
                 window.Content = null;
                 checks.Add("host-disposed");
                 Console.WriteLine("Blazor host disposed");
                 await Task.Delay(150);
             }
-            Check(services.GetRequiredService<ProbeState>().DisposeCount >= 4, "component-lifecycle", checks);
+            var state = services.GetRequiredService<ProbeState>();
+            Check(state.RenderCount >= 4 && state.DisposeCount == state.RenderCount, "component-lifecycle", checks);
         }
         catch (Exception ex)
         {

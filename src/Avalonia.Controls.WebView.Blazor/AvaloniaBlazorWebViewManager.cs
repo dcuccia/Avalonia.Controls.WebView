@@ -26,6 +26,7 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
     private string? _documentToken;
     private Uri? _navigationUri;
     private Task _sendQueue = Task.CompletedTask;
+    private Task? _disposeTask;
     private bool _disposed;
 
     public AvaloniaBlazorWebViewManager(
@@ -229,12 +230,14 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
         UnhandledException?.Invoke(this, exception);
     }
 
-    protected override async ValueTask DisposeAsyncCore()
+    protected override ValueTask DisposeAsyncCore() =>
+        new(Dispatcher.InvokeAsync(() => _disposeTask ??= DisposeHostAsync()));
+
+    private async Task DisposeHostAsync()
     {
-        if (_disposed)
-            return;
         // Component disposal can make final JS interop calls. Keep the bridge alive
-        // until Microsoft's page context has finished disposing.
+        // until Microsoft's page context has finished disposing. Concurrent callers
+        // must await that same operation rather than tear down the bridge early.
         await base.DisposeAsyncCore();
         _disposed = true;
         _documentToken = null;

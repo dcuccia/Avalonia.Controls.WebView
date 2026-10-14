@@ -86,6 +86,7 @@ jobs:
       - name: Run Linux native smoke under Xvfb
         if: runner.os == 'Linux'
         env:
+          GDK_BACKEND: x11
           LIBGL_ALWAYS_SOFTWARE: "1"
           # Ephemeral CI only. Sandbox compatibility remains a separate deployment gate.
           WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"

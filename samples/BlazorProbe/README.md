@@ -26,6 +26,10 @@ corresponding WebKitGTK 4.1 or WPE WebKit 2.0 runtime and a graphical session.
 The GitHub workflow uses Xvfb and a session bus on Linux. GTK runs on Ubuntu
 24.04; WPE runs in Debian 13 containers because the required WPE packages are
 not available in Ubuntu 24.04. Both execute natively on their runner architecture.
+For GTK the probe uses Avalonia's existing `X11PlatformOptions.UseGLibMainLoop`
+so the UI framework owns GLib integration. Start with `GDK_BACKEND=x11`, including
+under WSL/Xvfb; do not let an inherited Wayland GDK setting initialize GTK before
+the X11 adapter is created. No private event loop or forced process exit is used.
 
 `WebViewDesktopOnly` restricts the existing source projects to .NET 10 so this
 consumer does not require Android/browser workloads. It does not change their
@@ -44,8 +48,10 @@ it is not a headless browser simulation. It checks:
 - Missing assets remain 404s; document requests can fall back to the host page.
 - Deep-link navigation and reload reattach the Blazor renderer.
 - Same-document anchor navigation preserves working interop.
-- Forged bridge messages are rejected and external fetches are blocked.
-- Two complete host creation/disposal cycles dispose component instances.
+- Forged bridge messages are rejected, external navigation is cancelled, and
+  external fetches emit the expected CSP violation rather than just failing DNS.
+- Two complete host creation/disposal cycles dispose every rendered component,
+  including concurrent disposal callers while final JS interop is pending.
 
 `--report` produces a JSON result with the actual adapter, runtime, checks and
 failure details. A nonzero exit code indicates failure. The `Blazor native
@@ -53,6 +59,13 @@ probe` GitHub Actions workflow runs the published, self-contained application
 on Windows WebView2, macOS WKWebView, and GTK/WPE on Linux x64 and ARM64. It also
 runs the upstream response-contract tests and our document-policy tests.
 Each job uploads its application and native report.
+
+The probe exposed a GTK cancellation defect independent of Blazor: returning
+`TRUE` from `decide-policy` without making a decision lets WebKit default to
+`use`, even when the managed event was cancelled. This fork calls
+`webkit_policy_decision_ignore` for cancelled navigation and handled new-window
+requests, following [WebKit's policy contract](https://webkitgtk.org/reference/webkit2gtk/stable/signal.WebView.decide-policy.html).
+The smoke checks both cancellation and continued interop in the original page.
 
 ## Architecture
 
@@ -68,6 +81,8 @@ and an `IFileProvider` for the host's assets. Register root components and
 navigate. Dispose the manager **before** destroying/removing the native view:
 component disposal may make final JS interop calls, so the bridge stays alive
 until Microsoft's page-context disposal completes.
+Concurrent disposal callers share one UI-dispatched cleanup operation; a second
+caller cannot disconnect the bridge while the first is still disposing components.
 
 The Razor SDK and Microsoft package provide the static-web-asset manifest in
 development and copy framework/RCL assets into published `wwwroot`. The sample
@@ -86,12 +101,12 @@ Prefer the maintained implementation over a parallel framework:
 
 | Surface | Reference and reuse |
 | --- | --- |
-| Renderer, IPC, DI page scopes, static assets | [ASP.NET Core `WebViewManager`](https://github.com/dotnet/aspnetcore/blob/main/src/Components/WebView/WebView/src/WebViewManager.cs), directly inherited through the shipping 10.0.12 package |
+| Renderer, IPC, DI page scopes, static assets | [ASP.NET Core `WebViewManager`](https://github.com/dotnet/aspnetcore/blob/v10.0.12/src/Components/WebView/WebView/src/WebViewManager.cs), directly inherited through the shipping 10.0.12 package |
 | Dispatcher adaptation | [MAUI `MauiDispatcher`](https://github.com/dotnet/maui/blob/main/src/BlazorWebView/src/Maui/MauiDispatcher.cs); our adapter similarly maps each overload to the UI framework's existing dispatcher |
 | WebKit bridge initialization | [MAUI Apple host](https://github.com/dotnet/maui/blob/main/src/BlazorWebView/src/Maui/iOS/BlazorWebViewHandler.iOS.cs); explicitly provide `window.external`, which WebKit does not supply, before `Blazor.start()` |
 | Non-Windows host contract | [MAUI Tizen manager](https://github.com/dotnet/maui/blob/main/src/BlazorWebView/src/Maui/Tizen/TizenWebViewManager.cs), using the same manager/dispatcher/file-provider layering |
 | URI-to-file lookup | [MAUI query normalization](https://github.com/dotnet/maui/blob/main/src/BlazorWebView/src/SharedSource/QueryStringHelper.cs); we use the standard `Uri` API to exclude query and fragment without duplicating that internal helper |
-| Native engines and UI lifetime | Existing Avalonia `NativeWebView`, desktop lifetime, dispatcher, and adapter implementation; no additional native engine wrapper in the Blazor package |
+| Native engines and UI lifetime | Existing Avalonia `NativeWebView`, desktop lifetime, dispatcher, and adapter implementation; GTK uses the public [GLib-loop option](https://github.com/AvaloniaUI/Avalonia/blob/12.1.1/src/Avalonia.X11/X11Platform.cs), not an additional native engine wrapper |
 
 These are architecture/protocol references, not wholesale source copies.
 Platform-specific handlers are not interchangeable: Tizen is a useful
@@ -99,12 +114,16 @@ Linux-based precedent, not desktop GTK/WPE support. Native provenance, request
 cancellation and response behavior must be checked independently rather than
 copied blindly from a platform handler.
 
-The Linux pattern investigation also includes [Microsoft Playwright](https://github.com/microsoft/playwright)
-(native engine lifecycle, platform prerequisites and diagnostics) and
-[SkiaSharp](https://github.com/mono/SkiaSharp) (native resource and graphics
-ownership). They are references, not application dependencies. ASP.NET Core
-remains the primary source for Blazor semantics; Avalonia remains the owner of
-rendering and native event-loop integration.
+The Linux/native comparison also covered [Microsoft Playwright's process launcher](https://github.com/microsoft/playwright/blob/main/packages/utils/processLauncher.ts)
+and [SkiaSharp's native-object ownership](https://github.com/mono/SkiaSharp/blob/main/binding/SkiaSharp/SKObject.cs).
+The transferable patterns are explicit resource ownership, awaited cleanup,
+native prerequisite/launch diagnostics, and checking actual process termination
+rather than treating a completed application report as proof of clean shutdown.
+Playwright's separate browser-process termination strategies do not belong in
+this in-process host; SkiaSharp's native-handle wrappers are not needed in glue
+that already delegates native ownership to Avalonia. Neither adds an application
+dependency. ASP.NET Core remains the primary source for Blazor semantics;
+Avalonia remains the owner of rendering and native event-loop integration.
 
 ## Trust boundary and limitations
 
