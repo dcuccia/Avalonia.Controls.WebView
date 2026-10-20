@@ -1,0 +1,24 @@
+{
+  "runUrl": "https://github.com/dcuccia/Avalonia.Controls.WebView/actions/runs/38628511676",
+  "runCreatedAt": "2026-10-14T20:01:09Z",
+  "sourceCommit": "0140f91b67ad3a19389153ec410e2064b4c2f8a6",
+  "upstreamPullRequest": "https://github.com/AvaloniaUI/Avalonia.Controls.WebView/pull/99",
+  "upstreamHead": "ce503516105e9661733707f0d34570ec02c59763",
+  "conclusion": "success",
+  "reportSource": "Application JSON extracted from the original Actions logs; results are not a new test run.",
+  "processTeardownEvidence": "All six native smoke steps completed successfully; their shell commands propagate native process failure or timeout. Application reports alone do not establish clean teardown.",
+  "limitations": [
+    "Linux ran under Xvfb with software graphics and the WebKit sandbox disabled on ephemeral CI runners.",
+    "GTK ran on Ubuntu 24.04; WPE ran in Debian 13 containers on native x64 and ARM64 runners.",
+    "No Android, iOS, trimming, NativeAOT, MAUI handler, native Wayland or intended embedded-device validation.",
+    "Closed trusted local content only; native message source/frame provenance is not exposed by the public API."
+  ],
+  "jobs": [
+    { "name": "Windows WebView2 x64", "nativeSmokeConclusion": "success", "report": "win-x64-WebView2.json" },
+    { "name": "macOS WKWebView ARM64", "nativeSmokeConclusion": "success", "report": "osx-arm64-WkWebView.json" },
+    { "name": "Linux GTK x64", "nativeSmokeConclusion": "success", "report": "linux-x64-WebKitGtk.json" },
+    { "name": "Linux GTK ARM64", "nativeSmokeConclusion": "success", "report": "linux-arm64-WebKitGtk.json" },
+    { "name": "Linux WPE x64", "nativeSmokeConclusion": "success", "report": "linux-x64-WpeWebKit.json" },
+    { "name": "Linux WPE ARM64", "nativeSmokeConclusion": "success", "report": "linux-arm64-WpeWebKit.json" }
+  ]
+}

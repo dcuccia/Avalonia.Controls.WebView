@@ -3,7 +3,7 @@ using UiDispatcher = Avalonia.Threading.Dispatcher;
 
 namespace Avalonia.Controls.WebView.Blazor;
 
-public sealed class AvaloniaBlazorDispatcher : Dispatcher
+internal sealed class AvaloniaBlazorDispatcher : Dispatcher
 {
     public override bool CheckAccess() => UiDispatcher.UIThread.CheckAccess();
 

@@ -13,8 +13,12 @@ namespace Avalonia.Controls.WebView.Blazor;
 
 /// <summary>
 /// Experimental, local-document-only Blazor host over NativeWebView's public API.
-/// Attach before the control is added to the visual tree and dispose before removing it.
 /// </summary>
+/// <remarks>
+/// Create on Avalonia's UI thread before the control enters the visual tree.
+/// Await disposal before removing the control or disposing the caller-owned services
+/// and file provider. Only closed, trusted local documents are supported.
+/// </remarks>
 public sealed class AvaloniaBlazorWebViewManager : WebViewManager
 {
     private const string BootPath = "_avalonia/boot.js";
@@ -29,6 +33,14 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
     private Task? _disposeTask;
     private bool _disposed;
 
+    /// <summary>
+    /// Connects Microsoft's Blazor host to an uninitialized Avalonia native WebView.
+    /// </summary>
+    /// <param name="webView">The caller-owned view, not yet attached to the visual tree.</param>
+    /// <param name="services">Caller-owned services configured with AddBlazorWebView and logging.</param>
+    /// <param name="files">The caller-owned file provider for the host page and application assets.</param>
+    /// <param name="hostPage">The host-page path relative to the file provider.</param>
+    /// <param name="appBaseUri">The application base URI, or the platform default when null.</param>
     public AvaloniaBlazorWebViewManager(
         NativeWebView webView,
         IServiceProvider services,
@@ -54,12 +66,21 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
         _webView.NewWindowRequested += OnNewWindowRequested;
     }
 
+    /// <summary>
+    /// Gets the platform's application origin. Desktop hosts use app://localhost/.
+    /// The Android default is reserved for future validation, not a support claim.
+    /// </summary>
     public static Uri DefaultAppBaseUri { get; } = OperatingSystem.IsAndroid()
         ? new("https://appassets.androidplatform.net/")
         : new("app://localhost/");
 
+    /// <summary>
+    /// Reports bootstrap/document and outbound transport failures, which are also logged.
+    /// This does not replace Microsoft's renderer and JS interop error handling.
+    /// </summary>
     public event EventHandler<Exception>? UnhandledException;
 
+    /// <inheritdoc />
     protected override void NavigateCore(Uri absoluteUri)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -68,6 +89,7 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
         _webView.Navigate(absoluteUri);
     }
 
+    /// <inheritdoc />
     protected override void SendMessage(string message)
     {
         if (!_disposed)
@@ -230,6 +252,7 @@ public sealed class AvaloniaBlazorWebViewManager : WebViewManager
         UnhandledException?.Invoke(this, exception);
     }
 
+    /// <inheritdoc />
     protected override ValueTask DisposeAsyncCore() =>
         new(Dispatcher.InvokeAsync(() => _disposeTask ??= DisposeHostAsync()));
 

@@ -4,6 +4,8 @@ This fork exercises [AvaloniaUI/Avalonia.Controls.WebView#99](https://github.com
 at `ce503516105e9661733707f0d34570ec02c59763`. Its upstream commits are preserved.
 The Blazor integration is separate, experimental, not an official Avalonia
 package, and not currently packaged for NuGet.
+The separate library's [source-alpha API and ownership contract](../../src/Avalonia.Controls.WebView.Blazor/README.md)
+describes the boundary intended for a future community integration package.
 
 ## Run
 
@@ -66,6 +68,9 @@ Each job uploads its application and native report.
 passed all six native jobs on 2026-10-14 at code commit `0140f91`.
 Each ran the published app through both host cycles and exited successfully;
 a passing JSON report alone was not treated as proof of process teardown.
+The original [JSON reports and provenance manifest](evidence/38628511676)
+are retained in source independently of the seven-day runnable-app artifacts.
+They describe that pinned run, not the latest state of this branch.
 
 | Host | Native architecture | Result |
 | --- | --- | --- |
